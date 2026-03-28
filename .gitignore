@@ -1,3 +1,9 @@
+# SQLite
+*.db
+
+# Old pages backup
+_pages_old/
+
 # Python
 __pycache__/
 *.py[cod]

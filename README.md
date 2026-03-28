@@ -1,268 +1,126 @@
 # SpecSentinel
 
-**AI-powered spec-checker for commercial HVAC/Plumbing/Electrical contractors.**
+**AI Bid Risk Intelligence + Execution + Communication Engine for MEP Contractors**
 
-SpecSentinel ingests project manuals (PDF) and generates structured requirements extraction and comprehensive bid risk reports, helping contractors quickly identify key requirements and potential risks in bid documents.
+SpecSentinel analyzes construction spec PDFs and meeting notes to help HVAC, Plumbing, and Electrical contractors decide whether to bid, quantify financial risk, identify scope obligations, generate execution tasks, and auto-draft stakeholder emails.
+
+**UNSTRUCTURED DOCUMENTS -> DECISIONS -> FINANCIALS -> TASKS -> COMMUNICATION**
 
 ## Features
 
-- **Multi-tenant Architecture**: Organizations with users, projects, and documents
-- **PDF Analysis**: Extract text from project specification PDFs using pdfplumber
-- **AI-Powered Extraction**: Claude API integration for intelligent spec analysis
-- **Comprehensive Risk Reports**:
-  - Project summary (name, location, type, scope, schedule)
-  - Risk flags with severity, spec location, impact, and recommended actions
-  - Bid cost impact estimates ($, $$, $$$)
-  - Estimator checklist (confirm before pricing, include in bid cost, clarify via RFI)
-- **Structured Extraction**: Identify insurance, bonding, warranty, liquidated damages, testing, commissioning, and submittal requirements
-- **Division-Specific Analysis**: Extract Division 22 (Plumbing), 23 (HVAC), and 26 (Electrical) requirements
-- **Subscription Management**: Free/Pro/Enterprise tiers with usage limits
+- **Bid Decision Engine**: Go/No-Go recommendation with confidence and contingency %
+- **Financial Risk Analysis**: Total exposure range, cost drivers, LD/bond/warranty breakdown
+- **Risk Flags**: Severity, cost range, source quotes, page references, recommended actions
+- **Requirements Extraction**: Insurance, bonding, warranty, LDs, testing, commissioning, submittals, schedule
+- **Division Breakdown**: Div 22 (Plumbing), Div 23 (HVAC), Div 26 (Electrical)
+- **ActionBoard**: Three-column task board — To Clarify (RFI) / Must Include in Bid / Internal Tasks
+- **Meeting Notes Analysis**: Extract decisions, new risks, and tasks from meeting minutes
+- **Email Generation**: Auto-draft RFI, internal alignment, and finance summary emails
+- **AI-Powered**: Claude Sonnet for intelligent, structured extraction
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11+ with pip
+- Node.js 18+
+- Anthropic API key
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Set your API key
+echo "ANTHROPIC_API_KEY=sk-ant-your-key" > .env
+
+# Start server
+uvicorn app.main:app --reload --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+## Demo Flow
+
+1. **Upload a spec PDF** — AI analyzes it in 30-60 seconds
+2. **Review bid decision** — Go/No-Go with contingency %
+3. **Explore financial exposure** — Total range, cost drivers, category breakdown
+4. **Check risk flags** — Filter by severity, expand for details
+5. **View requirements** — All extracted obligations in one place
+6. **ActionBoard** — Tasks organized by category with owners
+7. **Paste meeting notes** — Extract new decisions, risks, tasks
+8. **Generate emails** — RFI, internal alignment, finance summary
+9. **Send** — Simulate sending with one click
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/upload` | Upload PDF and run full analysis |
+| GET | `/api/analysis/{id}` | Get stored analysis result |
+| GET | `/api/analyses` | List all analyses |
+| POST | `/api/meeting-notes` | Analyze meeting notes |
+| POST | `/api/generate-emails` | Generate 3 stakeholder emails |
+| POST | `/api/send-email` | Simulate sending an email |
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS |
+| Backend | FastAPI, Python 3.11+ |
+| AI | Anthropic Claude API (Sonnet) |
+| PDF | pdfplumber |
+| State | In-memory (demo mode) |
 
 ## Architecture
 
 ```
 specsentinel/
-├── backend/          # FastAPI + SQLAlchemy + Alembic
-│   ├── app/
-│   │   ├── api/      # REST API endpoints
-│   │   ├── core/     # Config, security
-│   │   ├── db/       # Database setup
-│   │   ├── models/   # SQLAlchemy models
-│   │   ├── schemas/  # Pydantic schemas
-│   │   └── services/ # Business logic (PDF, extraction, risk, LLM)
-│   ├── alembic/      # Database migrations
-│   └── tests/        # Pytest tests
-├── frontend/         # Next.js + React + TypeScript + Tailwind
-│   ├── components/   # React components
-│   ├── lib/          # API client, auth, types
-│   ├── pages/        # Next.js pages
-│   └── styles/       # Global CSS
-└── infra/            # Docker configuration
+├── backend/
+│   └── app/
+│       ├── main.py           # FastAPI app
+│       ├── api/routes.py     # All API endpoints
+│       ├── core/config.py    # Settings
+│       ├── schemas/          # Pydantic models
+│       └── services/
+│           ├── analysis_pipeline.py  # Orchestration
+│           ├── llm_extraction.py     # Claude API (spec + meeting + email)
+│           ├── pdf_ingest.py         # PDF text extraction + chunking
+│           └── spec_chunking.py      # Division segmentation
+├── frontend/
+│   ├── app/                  # Next.js App Router
+│   │   ├── layout.tsx
+│   │   ├── page.tsx          # Main single-page app
+│   │   └── globals.css
+│   ├── components/           # React components
+│   │   ├── BidDecision.tsx
+│   │   ├── FinancialSummary.tsx
+│   │   ├── RiskFlags.tsx
+│   │   ├── Requirements.tsx
+│   │   ├── ActionBoard.tsx
+│   │   ├── EmailPanel.tsx
+│   │   ├── MeetingNotes.tsx
+│   │   ├── FileUpload.tsx
+│   │   └── TabNav.tsx
+│   └── lib/
+│       ├── api.ts            # API client
+│       └── types.ts          # TypeScript types
+└── infra/
+    └── docker-compose.yml
 ```
-
-## Quick Start with Docker
-
-The easiest way to run SpecSentinel locally:
-
-```bash
-# Clone and navigate to project
-cd specsentinel
-
-# Copy environment files
-cp backend/.env.example backend/.env
-cp frontend/.env.local.example frontend/.env.local
-
-# Edit backend/.env and add your Anthropic API key
-# ANTHROPIC_API_KEY=sk-ant-xxx
-
-# Start all services
-cd infra
-docker-compose up --build
-```
-
-Services will be available at:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/api/docs
-
-## Manual Setup (Development)
-
-### Prerequisites
-
-- Python 3.11+ (tested with 3.13)
-- Node.js 18+
-- PostgreSQL 15+
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy and configure environment
-cp .env.example .env
-# Edit .env with your DATABASE_URL, SECRET_KEY, and ANTHROPIC_API_KEY
-
-# Run database migrations
-alembic upgrade head
-
-# Start development server
-uvicorn app.main:app --reload
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Copy environment file
-cp .env.local.example .env.local
-
-# Start development server
-npm run dev
-```
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-# Database (psycopg3 driver)
-DATABASE_URL=postgresql+psycopg://specsentinel:specsentinel@localhost:5432/specsentinel
-
-# Security
-SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
-
-# File Storage
-FILE_STORAGE_PATH=./uploads
-
-# Anthropic API (for AI-powered extraction)
-ANTHROPIC_API_KEY=sk-ant-xxx
-USE_LLM_EXTRACTION=true
-
-# Environment
-ENV=dev
-```
-
-### Frontend (`frontend/.env.local`)
-
-```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
-
-## Usage
-
-### 1. Register and Login
-
-1. Navigate to http://localhost:3000
-2. Click "Get Started" to register
-3. Enter your company name, name, email, and password
-4. You'll be redirected to the dashboard
-
-### 2. Create a Project
-
-1. Click "New Project" on the dashboard
-2. Enter project name, client name, and bid due date
-3. Click "Create Project"
-
-### 3. Upload a PDF
-
-1. Click on your project to open it
-2. Drag and drop a PDF or click to upload
-3. Watch the progress indicator as AI analyzes your document:
-   - Uploading document...
-   - Extracting text from PDF...
-   - Analyzing spec requirements...
-   - Identifying risk flags...
-   - Generating bid report...
-
-### 4. Review Analysis
-
-The analysis will show:
-- **Project Summary**: Name, location, type, scope, schedule constraints
-- **Risk Assessment**: Overall risk level and detailed risk flags with:
-  - Severity (Low/Medium/High/Critical)
-  - Bid cost impact ($, $$, $$$)
-  - Spec location and quotes
-  - Impact analysis
-  - Recommended actions
-- **Estimator Checklist**:
-  - Must confirm before pricing
-  - Include in bid cost
-  - Clarify via RFI
-- **Key Requirements**: Insurance, bonding, warranty, LDs, testing, commissioning, submittals
-- **Division Requirements**: Division 22/23/26 specific extractions
-
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/register` - Register organization + user
-- `POST /api/v1/auth/login` - Login (OAuth2 form)
-- `POST /api/v1/auth/login/json` - Login (JSON body)
-- `GET /api/v1/auth/me` - Get current user
-
-### Projects
-- `GET /api/v1/projects/` - List projects
-- `POST /api/v1/projects/` - Create project
-- `GET /api/v1/projects/{id}` - Get project
-- `PATCH /api/v1/projects/{id}` - Update project
-- `DELETE /api/v1/projects/{id}` - Delete project
-
-### Documents
-- `POST /api/v1/documents/upload` - Upload PDF (multipart/form-data)
-- `GET /api/v1/documents/{id}` - Get document
-- `DELETE /api/v1/documents/{id}` - Delete document
-
-### Analysis
-- `GET /api/v1/analysis/{document_id}` - Get analysis for document
-- `GET /api/v1/analysis/project/{project_id}` - Get all analyses for project
-
-### Billing
-- `GET /api/v1/billing/plans` - List subscription plans
-- `GET /api/v1/billing/subscription` - Get current subscription
-- `GET /api/v1/billing/usage` - Get usage statistics
-- `POST /api/v1/billing/checkout` - Create checkout session (TODO: Stripe)
-
-## Running Tests
-
-```bash
-cd backend
-pytest
-```
-
-## TODOs for Production
-
-### Stripe Integration
-- [ ] Add Stripe customer creation
-- [ ] Implement checkout session creation
-- [ ] Add webhook handling for subscription events
-- [ ] Handle payment failures and subscription cancellation
-
-### Security & Infrastructure
-- [ ] Add rate limiting
-- [ ] Implement proper RBAC (role-based access control)
-- [ ] Add email verification
-- [ ] Set up S3/GCS for file storage
-- [ ] Add Redis for caching and background jobs
-- [ ] Set up Celery for async document processing
-
-### Features
-- [ ] Team member invitations
-- [ ] Document comparison
-- [ ] Export reports to PDF/Word
-- [ ] Email notifications for bid deadlines
-- [ ] Audit logging
-- [ ] RAG pipeline with embeddings for semantic search
-
-## Tech Stack
-
-### Backend
-- FastAPI - Web framework
-- SQLAlchemy 2.x - ORM
-- Alembic - Database migrations
-- PostgreSQL + psycopg3 - Database
-- pdfplumber - PDF text extraction
-- Anthropic Claude API - AI-powered extraction
-- Pydantic - Data validation
-- python-jose - JWT handling
-- bcrypt - Password hashing
-
-### Frontend
-- Next.js 14 - React framework
-- TypeScript - Type safety
-- Tailwind CSS - Styling
-- Axios - HTTP client
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT

@@ -1,83 +1,19 @@
 /**
- * TypeScript types for API data structures.
+ * TypeScript types for SpecSentinel v2 — hackathon demo.
  */
 
-export interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  role: "owner" | "admin" | "estimator" | "viewer";
-  is_active: boolean;
-  organization_id: string;
-  created_at: string;
-  updated_at: string;
-}
+// --- Enums ---
 
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Project {
-  id: string;
-  name: string;
-  client_name: string | null;
-  description: string | null;
-  bid_due_date: string | null;
-  status: "active" | "won" | "lost" | "no_bid" | "archived";
-  organization_id: string;
-  created_at: string;
-  updated_at: string;
-  documents?: DocumentBrief[];
-}
-
-export interface ProjectListItem {
-  id: string;
-  name: string;
-  client_name: string | null;
-  bid_due_date: string | null;
-  status: string;
-  document_count: number;
-  last_analysis_date: string | null;
-  created_at: string;
-}
-
-export interface DocumentBrief {
-  id: string;
-  original_filename: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  page_count: number | null;
-  created_at: string;
-  has_analysis: boolean;
-  risk_count: number;
-}
-
-export interface Document {
-  id: string;
-  filename: string;
-  original_filename: string;
-  file_size: number;
-  mime_type: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  page_count: number | null;
-  project_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SpecLocation {
-  section: string | null;
-  page: number | null;
-  chunk_id: string | null;
-}
-
+export type RiskSeverity = "low" | "medium" | "high" | "critical";
+export type RiskType = "warranty" | "penalty" | "bonding" | "insurance" | "testing" | "commissioning" | "schedule" | "scope" | "other";
 export type Responsibility = "gc" | "mechanical" | "electrical" | "plumbing" | "controls" | "owner" | "shared" | "unknown";
-export type RiskStatus = "open" | "acknowledged" | "included_in_bid" | "will_clarify" | "accepted";
-export type CostImpactType = "none" | "fixed" | "percentage" | "hourly" | "uncapped";
 export type GoNoGoRecommendation = "proceed" | "proceed_with_contingency" | "caution" | "do_not_bid";
+export type CostImpactType = "none" | "fixed" | "percentage" | "hourly" | "uncapped";
+export type TaskPriority = "high" | "medium" | "low";
+export type TaskCategory = "to_clarify" | "must_include" | "internal";
+export type OwnerType = "Estimating" | "PM" | "Finance" | "Ops";
+
+// --- Analysis Types ---
 
 export interface CostImpact {
   type: CostImpactType;
@@ -87,22 +23,28 @@ export interface CostImpact {
   description: string | null;
 }
 
+export interface SpecLocation {
+  section: string | null;
+  page: number | null;
+  chunk_id: string | null;
+}
+
 export interface RiskFlag {
-  type: string;
-  severity: "low" | "medium" | "high" | "critical";
+  type: RiskType;
+  severity: RiskSeverity;
   title: string;
   description: string;
   source_text: string | null;
-  source_quote?: string | null;  // Short direct quote from spec
-  spec_location?: SpecLocation | string | null;  // Structured location or legacy string
-  impact?: string[] | null;
-  recommended_action?: string[] | null;
-  bid_cost_impact?: string | null;  // Legacy field
-  cost_impact?: CostImpact | null;  // New structured cost impact
-  responsibility?: Responsibility;  // Who bears this risk
-  status?: RiskStatus;  // User-set status for tracking
-  risk_id?: string | null;
-  category?: string | null;
+  source_quote: string | null;
+  spec_location: SpecLocation | string | null;
+  impact: string[] | null;
+  recommended_action: string[] | null;
+  bid_cost_impact: string | null;
+  cost_impact: CostImpact | null;
+  responsibility: Responsibility;
+  status: string;
+  risk_id: string | null;
+  category: string | null;
 }
 
 export interface ProjectSummary {
@@ -111,15 +53,15 @@ export interface ProjectSummary {
   project_type: string | null;
   scope_description: string | null;
   schedule_constraints: string | null;
-  occupied_building?: boolean | null;
-  union_required?: boolean | null;
+  occupied_building: boolean | null;
+  union_required: boolean | null;
 }
 
 export interface ChecklistItem {
   item: string;
   category?: string | null;
   estimated_cost?: string | null;
-  priority?: "high" | "medium" | "low" | null;
+  priority?: string | null;
 }
 
 export interface EstimatorChecklist {
@@ -145,15 +87,15 @@ export interface FinancialExposure {
 }
 
 export interface RiskReport {
-  overall_risk_level: "low" | "medium" | "high" | "critical";
+  overall_risk_level: RiskSeverity;
   overall_summary: string;
   flags: RiskFlag[];
   total_flags: number;
   high_severity_count: number;
-  project_summary?: ProjectSummary | null;
-  estimator_checklist?: EstimatorChecklist | null;
-  go_no_go?: GoNoGo | null;
-  financial_exposure?: FinancialExposure | null;
+  project_summary: ProjectSummary | null;
+  estimator_checklist: EstimatorChecklist | null;
+  go_no_go: GoNoGo | null;
+  financial_exposure: FinancialExposure | null;
 }
 
 export interface SpecExtraction {
@@ -164,6 +106,8 @@ export interface SpecExtraction {
   testing_requirements: string | null;
   commissioning_requirements: string | null;
   submittals_summary: string | null;
+  closeout_requirements: string | null;
+  schedule_requirements: string | null;
   div22_requirements: string | null;
   div23_requirements: string | null;
   div26_requirements: string | null;
@@ -177,54 +121,97 @@ export interface DivisionData {
   div01_general: string | null;
 }
 
-export interface TextChunk {
-  chunk_id: string;
-  page: number;
-  text: string;
-  start_index: number;
-  end_index: number;
-  division: string | null;
-  section: string | null;
+// --- Action Board ---
+
+export interface ActionTask {
+  id: string;
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  category: TaskCategory;
+  owner_type: OwnerType;
+  linked_risk_id: string | null;
+  page_reference: number | null;
+  due_date: string | null;
+  assignee: string | null;
+  status: string;
 }
+
+export interface ActionBoard {
+  to_clarify: ActionTask[];
+  must_include: ActionTask[];
+  internal: ActionTask[];
+}
+
+// --- Emails ---
+
+export interface GeneratedEmail {
+  type: string;
+  subject: string;
+  recipients: string;
+  body: string;
+}
+
+export interface EmailSet {
+  emails: GeneratedEmail[];
+}
+
+// --- Meeting Notes ---
+
+export interface MeetingDecision {
+  decision: string;
+  impact: string | null;
+  owner: string | null;
+}
+
+export interface MeetingRiskUpdate {
+  title: string;
+  severity: RiskSeverity;
+  description: string;
+  cost_impact_min: number | null;
+  cost_impact_max: number | null;
+  cost_impact_description: string | null;
+  responsibility: string | null;
+  is_new: boolean;
+}
+
+export interface MeetingTaskUpdate {
+  title: string;
+  priority: TaskPriority;
+  category: TaskCategory;
+  owner_type: OwnerType;
+  description: string;
+  due_date: string | null;
+  assignee: string | null;
+}
+
+export interface ScheduleEvent {
+  title: string;
+  date: string;
+  type: "deadline" | "milestone" | "task" | "blackout" | "meeting";
+  description: string | null;
+  linked_task_id: string | null;
+}
+
+export interface MeetingAnalysis {
+  key_decisions: MeetingDecision[];
+  new_risks: MeetingRiskUpdate[];
+  updated_tasks: MeetingTaskUpdate[];
+  schedule_events: ScheduleEvent[];
+  financial_impact_summary: string | null;
+  revised_exposure_min: number | null;
+  revised_exposure_max: number | null;
+}
+
+// --- Full Analysis Result ---
 
 export interface AnalysisResult {
   id: string;
-  document_id: string;
+  filename: string;
+  page_count: number;
   extraction: SpecExtraction;
   risk_report: RiskReport;
   division_data: DivisionData | null;
-  chunks?: TextChunk[] | null;  // Document chunks for navigation
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Plan {
-  id: string;
-  name: string;
-  tier: "free" | "pro" | "enterprise";
-  price_monthly_cents: number;
-  price_yearly_cents: number;
-  max_projects: number;
-  max_documents_per_month: number;
-  max_users: number;
-}
-
-export interface Subscription {
-  id: string;
-  status: "active" | "past_due" | "canceled" | "trialing";
-  plan: Plan | null;
-  current_period_start: string | null;
-  current_period_end: string | null;
-  documents_analyzed_this_month: number;
-  projects_count: number;
-}
-
-export interface UsageStats {
-  documents_analyzed_this_month: number;
-  documents_limit: number;
-  projects_count: number;
-  projects_limit: number;
-  users_count: number;
-  users_limit: number;
-  plan_tier: string;
+  action_board: ActionBoard | null;
+  chunks: any[] | null;
 }

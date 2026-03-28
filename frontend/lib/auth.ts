@@ -1,30 +1,24 @@
 /**
- * Authentication utilities for token management.
+ * Token management for JWT auth.
  */
 
 const TOKEN_KEY = "specsentinel_token";
-
-export interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-  organization_id: string;
-}
+const USER_KEY = "specsentinel_user";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function setToken(token: string): void {
-  if (typeof window === "undefined") return;
+export function setAuth(token: string, user: any): void {
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
-export function removeToken(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_KEY);
+export function getUser(): any | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
 }
 
 export function isAuthenticated(): boolean {
@@ -32,6 +26,7 @@ export function isAuthenticated(): boolean {
 }
 
 export function logout(): void {
-  removeToken();
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
   window.location.href = "/login";
 }

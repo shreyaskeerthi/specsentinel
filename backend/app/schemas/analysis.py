@@ -1,14 +1,12 @@
-"""Analysis schemas - spec extraction and risk report."""
+"""Analysis schemas — spec extraction, risk report, action board, emails."""
 
-from datetime import datetime
 from enum import Enum
-from uuid import UUID
-
 from pydantic import BaseModel
 
 
+# --- Enums ---
+
 class RiskSeverity(str, Enum):
-    """Risk severity levels."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -16,7 +14,6 @@ class RiskSeverity(str, Enum):
 
 
 class RiskType(str, Enum):
-    """Types of identified risks."""
     WARRANTY = "warranty"
     PENALTY = "penalty"
     BONDING = "bonding"
@@ -29,7 +26,6 @@ class RiskType(str, Enum):
 
 
 class Responsibility(str, Enum):
-    """Who is responsible for addressing the risk."""
     GC = "gc"
     MECHANICAL = "mechanical"
     ELECTRICAL = "electrical"
@@ -41,7 +37,6 @@ class Responsibility(str, Enum):
 
 
 class GoNoGoRecommendation(str, Enum):
-    """Bid go/no-go recommendation."""
     PROCEED = "proceed"
     PROCEED_WITH_CONTINGENCY = "proceed_with_contingency"
     CAUTION = "caution"
@@ -49,7 +44,6 @@ class GoNoGoRecommendation(str, Enum):
 
 
 class RiskStatus(str, Enum):
-    """Status of risk item handling."""
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     INCLUDED_IN_BID = "included_in_bid"
@@ -58,7 +52,6 @@ class RiskStatus(str, Enum):
 
 
 class CostImpactType(str, Enum):
-    """Type of cost impact."""
     NONE = "none"
     FIXED = "fixed"
     PERCENTAGE = "percentage"
@@ -66,8 +59,28 @@ class CostImpactType(str, Enum):
     UNCAPPED = "uncapped"
 
 
+class TaskPriority(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class TaskCategory(str, Enum):
+    TO_CLARIFY = "to_clarify"
+    MUST_INCLUDE = "must_include"
+    INTERNAL = "internal"
+
+
+class OwnerType(str, Enum):
+    ESTIMATING = "Estimating"
+    PM = "PM"
+    FINANCE = "Finance"
+    OPS = "Ops"
+
+
+# --- Spec Extraction ---
+
 class SpecExtraction(BaseModel):
-    """Structured extraction from spec document."""
     insurance_requirements: str | None = None
     bonding_requirements: str | None = None
     warranty_requirements: str | None = None
@@ -75,51 +88,51 @@ class SpecExtraction(BaseModel):
     testing_requirements: str | None = None
     commissioning_requirements: str | None = None
     submittals_summary: str | None = None
-    div22_requirements: str | None = None  # Plumbing
-    div23_requirements: str | None = None  # HVAC
-    div26_requirements: str | None = None  # Electrical
+    closeout_requirements: str | None = None
+    schedule_requirements: str | None = None
+    div22_requirements: str | None = None
+    div23_requirements: str | None = None
+    div26_requirements: str | None = None
 
+
+# --- Risk Report ---
 
 class SpecLocation(BaseModel):
-    """Location in the spec document where a risk was found."""
-    section: str | None = None  # e.g., "23 05 93"
-    page: int | None = None  # PDF page number (1-based)
-    chunk_id: str | None = None  # Internal chunk identifier for navigation
+    section: str | None = None
+    page: int | None = None
+    chunk_id: str | None = None
 
 
 class CostImpact(BaseModel):
-    """Detailed cost impact for a risk."""
     type: CostImpactType = CostImpactType.NONE
-    min_dollars: int | None = None  # e.g., 5000
-    max_dollars: int | None = None  # e.g., 25000
-    percentage_of_contract: float | None = None  # e.g., 2.5
-    description: str | None = None  # e.g., "$5,000-$25,000 added cost"
+    min_dollars: int | None = None
+    max_dollars: int | None = None
+    percentage_of_contract: float | None = None
+    description: str | None = None
 
 
 class RiskFlag(BaseModel):
-    """Individual risk flag identified in analysis."""
     type: RiskType
     severity: RiskSeverity
     title: str
     description: str
-    source_text: str | None = None  # Spec quote that triggered the flag (legacy)
-    source_quote: str | None = None  # Short direct quote from spec
-    spec_location: SpecLocation | str | None = None  # Structured location or legacy string
-    impact: list[str] | None = None  # Impact bullet points
-    recommended_action: list[str] | None = None  # Action items
-    bid_cost_impact: str | None = None  # Legacy: None/Minimal, Likely $, $$, $$$
-    cost_impact: CostImpact | None = None  # New structured cost impact
-    responsibility: Responsibility = Responsibility.UNKNOWN  # Who bears this risk
-    status: RiskStatus = RiskStatus.OPEN  # User-set status for tracking
-    risk_id: str | None = None  # R1, R2, etc.
-    category: str | None = None  # Detailed category
+    source_text: str | None = None
+    source_quote: str | None = None
+    spec_location: SpecLocation | str | None = None
+    impact: list[str] | None = None
+    recommended_action: list[str] | None = None
+    bid_cost_impact: str | None = None
+    cost_impact: CostImpact | None = None
+    responsibility: Responsibility = Responsibility.UNKNOWN
+    status: RiskStatus = RiskStatus.OPEN
+    risk_id: str | None = None
+    category: str | None = None
 
 
 class ProjectSummary(BaseModel):
-    """Project summary from spec analysis."""
     project_name: str | None = None
     location: str | None = None
-    project_type: str | None = None  # school, hospital, commercial, industrial, etc.
+    project_type: str | None = None
     scope_description: str | None = None
     schedule_constraints: str | None = None
     occupied_building: bool | None = None
@@ -127,40 +140,35 @@ class ProjectSummary(BaseModel):
 
 
 class ChecklistItem(BaseModel):
-    """Single checklist item with category/priority."""
     item: str
-    category: str | None = None  # Insurance, Bonds, Schedule, Scope, Other
-    estimated_cost: str | None = None  # e.g., "$X-$Y" or "+X%"
-    priority: str | None = None  # high, medium, low
+    category: str | None = None
+    estimated_cost: str | None = None
+    priority: str | None = None
 
 
 class EstimatorChecklist(BaseModel):
-    """Checklist items for estimator."""
     must_confirm_before_pricing: list[ChecklistItem | str] = []
     include_in_bid_cost: list[ChecklistItem | str] = []
     clarify_via_rfi: list[ChecklistItem | str] = []
 
 
 class GoNoGo(BaseModel):
-    """Go/No-Go bid recommendation."""
     recommendation: GoNoGoRecommendation = GoNoGoRecommendation.PROCEED
-    contingency_percent: float = 0  # Suggested contingency percentage (0-25)
-    key_concerns: list[str] = []  # Top 3 concerns
-    reasoning: str | None = None  # Explanation of recommendation
+    contingency_percent: float = 0
+    key_concerns: list[str] = []
+    reasoning: str | None = None
 
 
 class FinancialExposure(BaseModel):
-    """Summary of financial exposure from identified risks."""
-    total_identified_min: int = 0  # Sum of all min cost impacts
-    total_identified_max: int = 0  # Sum of all max cost impacts
-    ld_daily_rate: int | None = None  # Liquidated damages per day
-    ld_cap: int | None = None  # LD cap if specified
-    bond_percentage: float | None = None  # Bond requirement %
-    retention_percentage: float | None = None  # Retention %
+    total_identified_min: int = 0
+    total_identified_max: int = 0
+    ld_daily_rate: int | None = None
+    ld_cap: int | None = None
+    bond_percentage: float | None = None
+    retention_percentage: float | None = None
 
 
 class RiskReport(BaseModel):
-    """Complete risk report for a document."""
     overall_risk_level: RiskSeverity
     overall_summary: str
     flags: list[RiskFlag] = []
@@ -173,7 +181,6 @@ class RiskReport(BaseModel):
 
 
 class DivisionData(BaseModel):
-    """Division-specific extracted data."""
     div22_plumbing: str | None = None
     div23_hvac: str | None = None
     div26_electrical: str | None = None
@@ -182,7 +189,6 @@ class DivisionData(BaseModel):
 
 
 class TextChunkSchema(BaseModel):
-    """Schema for a text chunk from PDF extraction."""
     chunk_id: str
     page: int
     text: str
@@ -192,16 +198,96 @@ class TextChunkSchema(BaseModel):
     section: str | None = None
 
 
-class AnalysisResultRead(BaseModel):
-    """Full analysis result response."""
-    id: UUID
-    document_id: UUID
+# --- Action Board ---
+
+class ActionTask(BaseModel):
+    id: str
+    title: str
+    description: str
+    priority: TaskPriority
+    category: TaskCategory
+    owner_type: OwnerType
+    linked_risk_id: str | None = None
+    page_reference: int | None = None
+    due_date: str | None = None  # ISO date string
+    assignee: str | None = None
+    status: str = "open"  # open, in_progress, done
+
+
+class ActionBoard(BaseModel):
+    to_clarify: list[ActionTask] = []
+    must_include: list[ActionTask] = []
+    internal: list[ActionTask] = []
+
+
+# --- Emails ---
+
+class GeneratedEmail(BaseModel):
+    type: str  # "rfi", "internal", "finance"
+    subject: str
+    recipients: str  # role-based, e.g. "GC / Owner Rep"
+    body: str
+
+
+class EmailSet(BaseModel):
+    emails: list[GeneratedEmail] = []
+
+
+# --- Meeting Notes ---
+
+class MeetingDecision(BaseModel):
+    decision: str
+    impact: str | None = None
+    owner: str | None = None
+
+
+class MeetingRiskUpdate(BaseModel):
+    title: str
+    severity: RiskSeverity
+    description: str
+    cost_impact_min: int | None = None
+    cost_impact_max: int | None = None
+    cost_impact_description: str | None = None
+    responsibility: str | None = None
+    is_new: bool = True
+
+
+class MeetingTaskUpdate(BaseModel):
+    title: str
+    priority: TaskPriority
+    category: TaskCategory
+    owner_type: OwnerType
+    description: str
+    due_date: str | None = None
+    assignee: str | None = None
+
+
+class ScheduleEvent(BaseModel):
+    title: str
+    date: str  # ISO date
+    type: str  # "deadline", "milestone", "task", "blackout", "meeting"
+    description: str | None = None
+    linked_task_id: str | None = None
+
+
+class MeetingAnalysis(BaseModel):
+    key_decisions: list[MeetingDecision] = []
+    new_risks: list[MeetingRiskUpdate] = []
+    updated_tasks: list[MeetingTaskUpdate] = []
+    schedule_events: list[ScheduleEvent] = []
+    financial_impact_summary: str | None = None
+    revised_exposure_min: int | None = None
+    revised_exposure_max: int | None = None
+
+
+# --- Full Analysis Result (in-memory) ---
+
+class AnalysisResult(BaseModel):
+    id: str
+    filename: str
+    page_count: int
     extraction: SpecExtraction
     risk_report: RiskReport
     division_data: DivisionData | None = None
-    chunks: list[TextChunkSchema] | None = None  # Document chunks for navigation
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    action_board: ActionBoard | None = None
+    chunks: list[TextChunkSchema] | None = None
