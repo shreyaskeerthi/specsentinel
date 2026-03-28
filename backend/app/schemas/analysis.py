@@ -241,6 +241,11 @@ class MeetingDecision(BaseModel):
     owner: str | None = None
 
 
+class MeetingAttendee(BaseModel):
+    name: str
+    role: str | None = None
+
+
 class MeetingRiskUpdate(BaseModel):
     title: str
     severity: RiskSeverity
@@ -250,6 +255,7 @@ class MeetingRiskUpdate(BaseModel):
     cost_impact_description: str | None = None
     responsibility: str | None = None
     is_new: bool = True
+    related_risk_id: str | None = None  # e.g. "R3" — patches existing flag
 
 
 class MeetingTaskUpdate(BaseModel):
@@ -260,6 +266,8 @@ class MeetingTaskUpdate(BaseModel):
     description: str
     due_date: str | None = None
     assignee: str | None = None
+    linked_task_id: str | None = None  # if set, patch existing task instead of appending
+    new_status: str | None = None       # "open", "in_progress", "done"
 
 
 class ScheduleEvent(BaseModel):
@@ -271,6 +279,8 @@ class ScheduleEvent(BaseModel):
 
 
 class MeetingAnalysis(BaseModel):
+    summary: str | None = None
+    attendees: list[MeetingAttendee] = []
     key_decisions: list[MeetingDecision] = []
     new_risks: list[MeetingRiskUpdate] = []
     updated_tasks: list[MeetingTaskUpdate] = []

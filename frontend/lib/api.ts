@@ -4,7 +4,7 @@
 
 import axios from "axios";
 import { getToken, logout } from "./auth";
-import type { AnalysisResult, EmailSet, MeetingAnalysis } from "./types";
+import type { AnalysisResult, EmailSet, MeetingAnalysis, MeetingNoteSummary } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -163,9 +163,14 @@ export async function pollAnalysis(
 
 // ── Meeting Notes ──
 
-export async function analyzeMeetingNotes(projectId: string, notes: string) {
-  const { data } = await api.post(`/projects/${projectId}/meeting-notes`, { notes });
+export async function analyzeMeetingNotes(projectId: string, notes: string, title?: string) {
+  const { data } = await api.post(`/projects/${projectId}/meeting-notes`, { notes, title });
   return data; // { analysis_id, status: "pending" }
+}
+
+export async function listMeetingNotes(projectId: string): Promise<MeetingNoteSummary[]> {
+  const { data } = await api.get(`/projects/${projectId}/meeting-notes`);
+  return data;
 }
 
 // ── Emails ──

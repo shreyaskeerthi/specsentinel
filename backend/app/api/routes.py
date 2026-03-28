@@ -5,6 +5,7 @@ import shutil
 import threading
 import traceback
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
@@ -86,6 +87,7 @@ class MilestoneUpdate(BaseModel):
 
 class MeetingNotesRequest(BaseModel):
     notes: str
+    title: str | None = None
     project_id: str | None = None
 
 class EmailGenerateRequest(BaseModel):
@@ -585,26 +587,42 @@ def _run_meeting_analysis_background(analysis_id: str, notes: str, existing_data
             if doc_analysis and doc_analysis.risk_report:
                 rr = dict(doc_analysis.risk_report)
 
-                # Merge new risks into flags
+                # Merge new risks into flags / patch existing ones
                 for nr in meeting_data.get("new_risks", []):
-                    rr.setdefault("flags", []).append({
-                        "id": f"MR{len(rr.get('flags', []))+1}",
-                        "type": "scope",
-                        "severity": nr.get("severity", "medium"),
-                        "title": nr.get("title", ""),
-                        "description": nr.get("description", ""),
-                        "source_quote": "From meeting notes",
-                        "responsibility": nr.get("responsibility", "shared"),
-                        "category": "Meeting Update",
-                        "cost_impact": {
-                            "type": "fixed" if nr.get("cost_impact_min") else "none",
-                            "min_dollars": nr.get("cost_impact_min"),
-                            "max_dollars": nr.get("cost_impact_max"),
-                            "description": nr.get("cost_impact_description"),
-                        },
-                        "impact": [nr.get("description", "")],
-                        "recommended_action": [],
-                    })
+                    related_id = nr.get("related_risk_id")
+                    if not nr.get("is_new", True) and related_id:
+                        # Patch existing flag by risk_id
+                        for flag in rr.get("flags", []):
+                            if flag.get("risk_id") == related_id or flag.get("id") == related_id:
+                                flag["status"] = "acknowledged"
+                                note = f"\n[Meeting update] {nr.get('description', '')}"
+                                flag["description"] = flag.get("description", "") + note
+                                if nr.get("cost_impact_min") and not flag.get("cost_impact", {}).get("min_dollars"):
+                                    flag.setdefault("cost_impact", {})["min_dollars"] = nr["cost_impact_min"]
+                                if nr.get("cost_impact_max") and not flag.get("cost_impact", {}).get("max_dollars"):
+                                    flag.setdefault("cost_impact", {})["max_dollars"] = nr["cost_impact_max"]
+                                break
+                    else:
+                        rr.setdefault("flags", []).append({
+                            "id": f"MR{len(rr.get('flags', []))+1}",
+                            "risk_id": f"MR{len(rr.get('flags', []))+1}",
+                            "type": "scope",
+                            "severity": nr.get("severity", "medium"),
+                            "title": nr.get("title", ""),
+                            "description": nr.get("description", ""),
+                            "source_quote": "From meeting notes",
+                            "responsibility": nr.get("responsibility", "shared"),
+                            "category": "Meeting Update",
+                            "status": "open",
+                            "cost_impact": {
+                                "type": "fixed" if nr.get("cost_impact_min") else "none",
+                                "min_dollars": nr.get("cost_impact_min"),
+                                "max_dollars": nr.get("cost_impact_max"),
+                                "description": nr.get("cost_impact_description"),
+                            },
+                            "impact": [nr.get("description", "")],
+                            "recommended_action": [],
+                        })
                 rr["total_flags"] = len(rr.get("flags", []))
                 rr["high_severity_count"] = sum(
                     1 for f in rr.get("flags", [])
@@ -622,13 +640,38 @@ def _run_meeting_analysis_background(analysis_id: str, notes: str, existing_data
 
                 doc_analysis.risk_report = rr
 
-                # Merge tasks into action board
+                # Merge tasks into action board — patch existing or append new
                 ab = dict(doc_analysis.action_board or {})
+                all_tasks = [t for col in ab.values() for t in (col if isinstance(col, list) else [])]
                 for task in meeting_data.get("updated_tasks", []):
+                    linked_id = task.get("linked_task_id")
+                    if linked_id:
+                        # Find and patch existing task across all columns
+                        patched = False
+                        for col_tasks in ab.values():
+                            if not isinstance(col_tasks, list):
+                                continue
+                            for existing_task in col_tasks:
+                                if existing_task.get("id") == linked_id:
+                                    if task.get("new_status"):
+                                        existing_task["status"] = task["new_status"]
+                                    if task.get("assignee"):
+                                        existing_task["assignee"] = task["assignee"]
+                                    if task.get("due_date"):
+                                        existing_task["due_date"] = task["due_date"]
+                                    if task.get("description"):
+                                        existing_task["description"] = task["description"]
+                                    patched = True
+                                    break
+                            if patched:
+                                break
+                        if patched:
+                            continue
+                    # Append as new task
                     cat = task.get("category", "internal")
                     col = ab.setdefault(cat, [])
                     col.append({
-                        "id": f"MT{len(col)+1}",
+                        "id": f"MT{len(all_tasks)+1}",
                         "title": task.get("title", ""),
                         "description": task.get("description", ""),
                         "priority": task.get("priority", "medium"),
@@ -638,9 +681,23 @@ def _run_meeting_analysis_background(analysis_id: str, notes: str, existing_data
                         "page_reference": None,
                         "due_date": task.get("due_date"),
                         "assignee": task.get("assignee"),
-                        "status": "open",
+                        "status": task.get("new_status", "open"),
                     })
+                    all_tasks.append({})  # keep count accurate
                 doc_analysis.action_board = ab
+
+                # Auto-create milestones from schedule events
+                for evt in meeting_data.get("schedule_events", []):
+                    if evt.get("date") and evt.get("title"):
+                        milestone = Milestone(
+                            project_id=doc_analysis.project_id,
+                            title=evt["title"],
+                            date=evt["date"],
+                            phase="construction",
+                            type=evt.get("type", "milestone"),
+                            description=evt.get("description"),
+                        )
+                        db.add(milestone)
 
                 db.commit()
 
@@ -675,11 +732,16 @@ def analyze_meeting_notes(
 
     existing_data = None
     if existing and existing.risk_report:
-        existing_data = {"risk_report": existing.risk_report}
+        existing_data = {
+            "risk_report": existing.risk_report,
+            "action_board": existing.action_board or {},
+        }
 
+    default_title = datetime.now(timezone.utc).strftime("%Y-%m-%d Meeting Notes")
     analysis = Analysis(
         project_id=project_id,
         source_type="meeting_notes",
+        filename=req.title or default_title,
         status="pending",
     )
     db.add(analysis)
@@ -696,6 +758,35 @@ def analyze_meeting_notes(
     thread.start()
 
     return {"analysis_id": analysis.id, "status": "pending", "merging_into": doc_analysis_id}
+
+
+@router.get("/projects/{project_id}/meeting-notes")
+def list_meeting_notes(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user.id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    analyses = (
+        db.query(Analysis)
+        .filter(Analysis.project_id == project_id, Analysis.source_type == "meeting_notes")
+        .order_by(Analysis.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": a.id,
+            "title": a.filename,
+            "status": a.status,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "summary": (a.meeting_result or {}).get("summary"),
+            "attendee_count": len((a.meeting_result or {}).get("attendees", [])),
+        }
+        for a in analyses
+    ]
 
 
 # ──────────────────────────────────────────────

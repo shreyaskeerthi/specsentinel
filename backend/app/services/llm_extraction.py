@@ -9,7 +9,7 @@ from app.schemas.analysis import (
     Responsibility, CostImpact, CostImpactType, GoNoGo, GoNoGoRecommendation,
     FinancialExposure, RiskStatus, ActionBoard, ActionTask, TaskPriority,
     TaskCategory, OwnerType, EmailSet, GeneratedEmail, MeetingAnalysis,
-    MeetingDecision, MeetingRiskUpdate, MeetingTaskUpdate,
+    MeetingDecision, MeetingRiskUpdate, MeetingTaskUpdate, MeetingAttendee,
 )
 from app.services.pdf_ingest import TextChunk
 
@@ -306,15 +306,29 @@ Return ONLY the JSON object."""
             raise RuntimeError("LLM extraction not available")
 
         context = ""
+        known_risk_ids = []
         if existing_analysis:
             rr = existing_analysis.get("risk_report", {})
             fin = rr.get("financial_exposure", {})
+            flags = rr.get("flags", [])
+            known_risk_ids = [f.get("risk_id") for f in flags if f.get("risk_id")]
+            known_risks_summary = json.dumps([
+                {"id": f.get("risk_id"), "title": f.get("title", "")}
+                for f in flags[:15]
+            ])
+            ab = existing_analysis.get("action_board", {})
+            all_tasks = [t for col in ab.values() for t in (col if isinstance(col, list) else [])]
+            known_tasks_summary = json.dumps([
+                {"id": t.get("id"), "title": t.get("title", ""), "status": t.get("status", "open"), "assignee": t.get("assignee")}
+                for t in all_tasks[:20]
+            ])
             context = f"""
-EXISTING ANALYSIS (for context — only return NEW information from the meeting):
+EXISTING ANALYSIS (for context — only return NEW or CHANGED information from the meeting):
 - Current exposure: ${fin.get('total_identified_min', 0):,} - ${fin.get('total_identified_max', 0):,}
 - Current risk level: {rr.get('overall_risk_level', 'unknown')}
-- Known risks: {json.dumps([f.get('title', '') for f in rr.get('flags', [])[:10]])}
+- Known risks (with IDs): {known_risks_summary}
 - Recommendation: {(rr.get('go_no_go') or {}).get('recommendation', 'unknown')}
+- Existing tasks (with IDs): {known_tasks_summary}
 """
 
         prompt = f"""You are a construction PM analyzing meeting minutes for an MEP subcontractor.
@@ -324,9 +338,13 @@ MEETING NOTES:
 {notes[:15000]}
 ---
 
-Extract ONLY NEW information from this meeting. Return JSON:
+Extract ALL relevant information from this meeting. Return JSON:
 
 {{
+  "summary": "2-4 sentence narrative summary of what was discussed and decided",
+  "attendees": [
+    {{"name": "Full Name", "role": "their role/company or null"}}
+  ],
   "key_decisions": [
     {{"decision": "what was decided", "impact": "financial/schedule/scope impact", "owner": "person or role"}}
   ],
@@ -339,7 +357,8 @@ Extract ONLY NEW information from this meeting. Return JSON:
       "cost_impact_max": 20000,
       "cost_impact_description": "$5K-$20K for XYZ",
       "responsibility": "gc|mechanical|electrical|plumbing|owner|shared",
-      "is_new": true
+      "is_new": true,
+      "related_risk_id": null
     }}
   ],
   "updated_tasks": [
@@ -350,7 +369,9 @@ Extract ONLY NEW information from this meeting. Return JSON:
       "owner_type": "Estimating|PM|Finance|Ops",
       "description": "specific action needed",
       "due_date": "2026-04-10",
-      "assignee": "person name or null"
+      "assignee": "person name or null",
+      "linked_task_id": null,
+      "new_status": null
     }}
   ],
   "schedule_events": [
@@ -367,12 +388,15 @@ Extract ONLY NEW information from this meeting. Return JSON:
 }}
 
 RULES:
-1. DATES: Extract or infer real dates from the meeting. Use ISO format (YYYY-MM-DD).
-2. COSTS: Provide real dollar min/max for each new risk.
-3. SCHEDULE: Extract ALL dates mentioned — deadlines, blackouts, milestones, meetings.
-4. REVISED EXPOSURE: Calculate updated total including existing + new risks.
-5. TASKS: Give each task a realistic due date based on meeting context.
-6. Only include genuinely NEW information, not things already in the existing analysis.
+1. summary: 2-4 sentence narrative of the meeting.
+2. attendees: list everyone identified in the transcript.
+3. new_risks with is_new=false: use related_risk_id to reference an EXISTING risk ID (e.g. "R3") when the meeting updates or acknowledges a known risk. Set is_new=true for genuinely new risks.
+4. DATES: Use ISO format (YYYY-MM-DD). Extract ALL dates mentioned.
+5. COSTS: Provide real dollar min/max for each new risk.
+6. REVISED EXPOSURE: Calculate updated total including existing + new risks.
+7. TASKS — two modes:
+   a. NEW task: leave linked_task_id=null, new_status=null.
+   b. UPDATE existing task: set linked_task_id to the matching task ID from "Existing tasks", set new_status to "open"|"in_progress"|"done" if the meeting changed it, set assignee if assigned in the meeting.
 
 Return ONLY the JSON object."""
 
@@ -389,14 +413,21 @@ Return ONLY the JSON object."""
         except (json.JSONDecodeError, IndexError):
             return MeetingAnalysis()
 
-        decisions = []
-        for d in data.get("key_decisions", []):
-            if isinstance(d, dict):
-                decisions.append(MeetingDecision(
-                    decision=d.get("decision", ""),
-                    impact=d.get("impact"),
-                    owner=d.get("owner"),
-                ))
+        attendees = [
+            MeetingAttendee(name=a.get("name", ""), role=a.get("role"))
+            for a in data.get("attendees", [])
+            if isinstance(a, dict) and a.get("name")
+        ]
+
+        decisions = [
+            MeetingDecision(
+                decision=d.get("decision", ""),
+                impact=d.get("impact"),
+                owner=d.get("owner"),
+            )
+            for d in data.get("key_decisions", [])
+            if isinstance(d, dict)
+        ]
 
         new_risks = []
         for r in data.get("new_risks", []):
@@ -410,6 +441,7 @@ Return ONLY the JSON object."""
                     cost_impact_description=r.get("cost_impact_description"),
                     responsibility=r.get("responsibility"),
                     is_new=r.get("is_new", True),
+                    related_risk_id=r.get("related_risk_id"),
                 ))
 
         tasks = []
@@ -435,6 +467,8 @@ Return ONLY the JSON object."""
                     description=t.get("description", ""),
                     due_date=t.get("due_date"),
                     assignee=t.get("assignee"),
+                    linked_task_id=t.get("linked_task_id"),
+                    new_status=t.get("new_status"),
                 ))
 
         schedule_events = []
@@ -450,6 +484,8 @@ Return ONLY the JSON object."""
                 ))
 
         return MeetingAnalysis(
+            summary=data.get("summary"),
+            attendees=attendees,
             key_decisions=decisions,
             new_risks=new_risks,
             updated_tasks=tasks,

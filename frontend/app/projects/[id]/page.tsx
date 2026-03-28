@@ -124,9 +124,9 @@ export default function ProjectPage() {
     }
   }, [projectId, loadProject]);
 
-  const handleMeetingNotes = useCallback(async (notes: string) => {
+  const handleMeetingNotes = useCallback(async (notes: string, title?: string) => {
     try {
-      const { analysis_id, merging_into } = await analyzeMeetingNotes(projectId, notes);
+      const { analysis_id, merging_into } = await analyzeMeetingNotes(projectId, notes, title);
       const result = await pollAnalysis(analysis_id);
       if (result.meeting_result) {
         setMeetingResult(result.meeting_result);
@@ -225,7 +225,7 @@ export default function ProjectPage() {
         {/* Upload + Meeting Notes Row (optional) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           <FileUpload onUpload={handleUpload} uploading={uploading} progress={uploadProgress} />
-          <MeetingNotes onAnalyze={handleMeetingNotes} meetingResult={meetingResult} disabled={false} />
+          <MeetingNotes onAnalyze={handleMeetingNotes} meetingResult={meetingResult} disabled={false} projectId={projectId} />
         </div>
 
         {/* Error */}

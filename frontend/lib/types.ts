@@ -173,6 +173,7 @@ export interface MeetingRiskUpdate {
   cost_impact_description: string | null;
   responsibility: string | null;
   is_new: boolean;
+  related_risk_id: string | null;
 }
 
 export interface MeetingTaskUpdate {
@@ -183,6 +184,8 @@ export interface MeetingTaskUpdate {
   description: string;
   due_date: string | null;
   assignee: string | null;
+  linked_task_id: string | null;
+  new_status: string | null;
 }
 
 export interface ScheduleEvent {
@@ -193,7 +196,14 @@ export interface ScheduleEvent {
   linked_task_id: string | null;
 }
 
+export interface MeetingAttendee {
+  name: string;
+  role: string | null;
+}
+
 export interface MeetingAnalysis {
+  summary: string | null;
+  attendees: MeetingAttendee[];
   key_decisions: MeetingDecision[];
   new_risks: MeetingRiskUpdate[];
   updated_tasks: MeetingTaskUpdate[];
@@ -201,6 +211,15 @@ export interface MeetingAnalysis {
   financial_impact_summary: string | null;
   revised_exposure_min: number | null;
   revised_exposure_max: number | null;
+}
+
+export interface MeetingNoteSummary {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string | null;
+  summary: string | null;
+  attendee_count: number;
 }
 
 // --- Full Analysis Result ---
